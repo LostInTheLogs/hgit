@@ -19,7 +19,7 @@ type GitGlob = (GitGlobMeta, FP.FilePattern)
 listRepoFilesRecursive :: FilePath -> WithRepository [FilePath]
 listRepoFilesRecursive = listRepoFilesRecursive_ []
 
--- https://hackage.haskell.org/package/filepattern-0.1.3/docs/System-FilePattern.html#v:stepDone
+-- TODO: global gitignore
 listRepoFilesRecursive_ :: [FP.Step GitGlobMeta] -> FilePath -> WithRepository [FilePath]
 listRepoFilesRecursive_ oldSteps relPath = do
   absPath <- worktreePath [relPath]

@@ -26,13 +26,11 @@ gitInit InitOptions{..} = do
 
   repo <- makeRepo worktree gitdir
   runWithRepo repo $ do
-    -- Create directory structure
     gitPath ["objects"] >>= Dir.createDirectory
     gitPath ["refs"] >>= Dir.createDirectory
     gitPath ["refs", "tags"] >>= Dir.createDirectory
     gitPath ["refs", "heads"] >>= Dir.createDirectory
 
-    -- Write initial repository files
     descPath <- gitPath ["description"]
     writeFile descPath "Unnamed repository; edit this file 'description' to name the repository.\n"
 

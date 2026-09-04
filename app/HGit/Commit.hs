@@ -139,6 +139,7 @@ oneLineLong Commit{..} = do
 
 type CommitQueue = (Q.MaxQueue Commit, Set Hash)
 
+-- | commit queue sorted by commit time
 makeCmtQueue :: [Commit] -> CommitQueue
 makeCmtQueue commits = do
   (Q.fromList commits, fromList $ commitHash <$> commits)

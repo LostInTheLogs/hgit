@@ -130,7 +130,9 @@ readLooseObj objHash = runMaybeT $ do
 
   pure $ runParserUnsafe parser (toLazy decomp)
 
--- [<type> <size>\0<data of size>]
+{- | reads the length of the object from the header, to be used with two step decompression
+[<type> <size>\0<data of size>]
+-}
 lenReader :: ByteString -> Int
 lenReader bs = case (BSC8.elemIndex ' ' bs, BS.elemIndex 0 bs) of
   (Nothing, _) -> throwErr "lenReader" "incomplete prefix"

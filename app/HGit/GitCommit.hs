@@ -52,7 +52,6 @@ indexToTree index = writeTree . snd =<< go [] 0 []
       Just (folder : _) -> do
         (newIdx, subItems) <- go (curDirs ++ [folder]) idx []
         newTree <- writeTree subItems
-        -- TODO: write the tree obj
 
         let newItems = TreeItem Directory folder (treeHash newTree) : items
         go curDirs newIdx newItems

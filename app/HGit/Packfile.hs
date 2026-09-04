@@ -119,9 +119,6 @@ Simple | Data
 Simple:
 compressed data
 
-  o
-xxxx---XX
-
 Delta:
 OBJ_REF_DELTA> base object name if
 OBJ_OFS_DELTA> a negative relative offset from the delta object's position in the pack
