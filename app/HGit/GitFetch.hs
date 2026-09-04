@@ -73,16 +73,11 @@ infoRefsSmartS = do
 
 refDiscovery :: (MonadUnliftIO m) => Text -> m (Capabilities, [(Hash, ByteString)])
 refDiscovery url = do
-  -- req <- hgitRequest $ "GET " <> url <> "/info/refs?service=git-upload-pack"
-  -- response <- Http.httpBS req
-  -- let body = Http.getResponseBody response
-  -- writeFileBS "/home/vodfsh/Downloads/hgit_refdiscovery.bin" body -- TODO
-  trace "TODO use req" $
-    runConduitRes $
-      C.sourceFile "/home/vodfsh/Downloads/hgit_refdiscovery.bin"
-        -- Http.httpSource req getSrc
-        .| pktLineDecoder
-        .| infoRefsSmartS
+  req <- hgitRequest $ "GET " <> url <> "/info/refs?service=git-upload-pack"
+  runConduitRes $
+    Http.httpSource req getSrc
+      .| pktLineDecoder
+      .| infoRefsSmartS
 
 data AckType = AckSimple | AckContinue | AckCommon | AckReady deriving (Show, Eq)
 data Ack = Ack {ackHash :: Hash, ackType :: AckType} deriving (Show, Eq)

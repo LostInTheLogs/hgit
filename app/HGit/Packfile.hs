@@ -1,7 +1,7 @@
 module HGit.Packfile (readPackObj, Pack (..), readPack, indexPack) where
 
 import Control.Monad.Extra (firstJustM)
-import Crypto.Hash.SHA1 (hash, hashlazy)
+import qualified Crypto.Hash.SHA1 as SHA1
 import qualified Data.Attoparsec.Binary as AB
 import Data.Attoparsec.Lazy ((<?>))
 import qualified Data.Attoparsec.Lazy as A
@@ -381,7 +381,7 @@ indexPack bs readObj = do
             <> offsetsB
             <> bigOffsetsB
             <> B.shortByteString (hashBS packHash)
-  let idxRaw = idxData <> toLazy (hashlazy idxData)
+  let idxRaw = idxData <> toLazy (SHA1.hashlazy idxData)
 
   let filename = "pack-" <> hashToAscii packHash <> ".idx"
   path <- packPath [filename]
