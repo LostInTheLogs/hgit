@@ -1,8 +1,3 @@
-{-# LANGUAGE DeriveFunctor #-}
-{-# LANGUAGE LambdaCase #-}
-{-# LANGUAGE MagicHash #-}
-{-# LANGUAGE TemplateHaskell #-}
-
 module HGit.TransportUtils where
 
 import Conduit
@@ -84,11 +79,7 @@ pktLineDecoder = do
       let len = runFParserUnsafe FP.anyAsciiHexInt lenRaw
       body <- takeCE (len - 4) .| foldC
       when (BS.null body) $ throwErr "pktLineDecoder" "malformed pktline"
-      if BSC8.last body == '\n'
-        then
-          yield $ BSU.unsafeInit body
-        else
-          yield body
+      yield body
       pktLineDecoder
 
 pktLineWExtraFP :: Parser a -> Parser b -> Parser (a, b)

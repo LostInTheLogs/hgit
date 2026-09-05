@@ -107,6 +107,11 @@ distinctSorted xs = xs
 dropSuffix :: Text -> Text -> Text
 dropSuffix suffix txt = fromMaybe txt (T.stripSuffix suffix txt)
 
+dropNewLineBS :: ByteString -> ByteString
+dropNewLineBS bs = case BSC8.unsnoc bs of
+  Just (body, '\n') -> body
+  _ -> bs
+
 mmapWithBytestring :: (MonadUnliftIO m) => FilePath -> (ByteString -> m b) -> m b
 mmapWithBytestring filepath action = do
   (ptr, rawsize, offset, size) <- liftIO $ mmapFilePtr filepath ReadOnly Nothing

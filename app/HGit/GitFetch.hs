@@ -17,7 +17,7 @@ import qualified Data.List.NonEmpty as NE
 import Data.Maybe (fromJust)
 import qualified Data.PQueue.Max as Q
 import qualified Data.Set as Set
-import qualified Data.String.Conversions.Monomorphic as X
+import qualified Data.String.Conversions.Monomorphic as Str
 import qualified Data.Text as T
 import qualified Data.Vector as V
 import qualified FlatParse.Basic as FP
@@ -92,10 +92,10 @@ sideBandRouter ::
 sideBandRouter packQ sideQ bs = do
   case BS.uncons bs of
     Nothing -> pass
-    Just (1, rest) -> atomically $ writeTQueue packQ (Just rest)
-    Just (2, rest) -> atomically $ writeTQueue sideQ (Just $ rest)
-    Just (3, rest) -> throwErr "sideBandRouter" $ X.toStrictText rest
-    _ -> throwErr "sideBandRouter" "unknown channel"
+    Just (1, rest) -> atomically $ writeTQueue packQ (Just $ dropNewLineBS rest)
+    Just (2, rest) -> atomically $ writeTQueue sideQ (Just rest)
+    Just (3, rest) -> throwErr "remote error: " $ Str.toStrictText rest
+    _ -> throwErr "sideBandRouter" $ "unknown channel: " <> show bs
 
 gitUploadPackS ::
   (MonadResource m) =>
@@ -106,8 +106,8 @@ gitUploadPackS ::
 gitUploadPackS caps packQ sideQ = bracketP pass (const cleanup) $ const $ do
   (acks, _nak, restPktLine) <-
     pktLineDecoder .| do
-      a <- takeWhileC ("ACK" `BS.isPrefixOf`) .| mapC parseAck .| sinkList
-      n <- takeWhileC (== "NAK") .| headC
+      a <- takeWhileC ("ACK" `BS.isPrefixOf`) .| mapC (parseAck . dropNewLineBS) .| sinkList
+      n <- takeWhileC ("NAK" `BS.isPrefixOf`) .| mapC dropNewLineBS .| headC
       r <- await
       return (a, n, r)
 
@@ -176,7 +176,7 @@ negotiate path h caps reqEmpty wants oldPending common sent = do
       (,,)
         <$> Concurrently (runConduitRes source)
         <*> Concurrently (runConduit $ sourceCloseableQueue packfileQ .| sinkHandle h)
-        <*> Concurrently (runConduit $ sourceCloseableQueue sideQ .| stdoutC)
+        <*> Concurrently (runConduit $ (yield "\r" >> sourceCloseableQueue sideQ) .| mapC (T.replace "\r" "\rremote: " . decodeUtf8) .| mapM_C putText)
 
   let commits = Map.fromList batch
   let getCachedParents hash = case Map.lookup hash commits of
