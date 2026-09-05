@@ -100,7 +100,7 @@ findObjInPack objHash readObj idxPath = runMaybeT $ do
   let firstByte = fromIntegral $ SBS.head $ hashBS objHash
 
   let high = fromIntegral (idxFanout `UV.unsafeIndex` firstByte) - 1
-  let low = if firstByte == 0 then 0 else fromIntegral $ idxFanout `UV.unsafeIndex` (firstByte - 1) - 1
+  let low = if firstByte == 0 then 0 else fromIntegral $ idxFanout `UV.unsafeIndex` (firstByte - 1)
 
   offsetIdx <- hoistMaybe $ binarySearchHashStr idxObjectHashes low high objHash
   let rawOffset = idxOffsets `indexWord32BE` offsetIdx
