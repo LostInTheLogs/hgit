@@ -10,6 +10,7 @@ import qualified Data.Bits as Bits
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Builder as B
 import qualified Data.ByteString.Lazy as BSL
+import qualified Data.ByteString.Short as SBS
 import qualified Data.ByteString.Unsafe as BSU
 import qualified Data.Map as Map
 import qualified Data.String.Conversions.Monomorphic as Conv
@@ -32,12 +33,6 @@ import System.IO.Unsafe (unsafePerformIO)
 import UnliftIO (assert)
 import qualified UnliftIO as IO
 import qualified UnliftIO.Directory as Dir
-
--- TODO: use fanout
--- The header consists of 256 4-byte network byte order integers. N-th entry of
--- this table records the number of objects in the corresponding pack, the first
--- byte of whose object name is less than or equal to N. This is called the
--- first-level fan-out table.
 
 getIndexFiles :: WithRepository [FilePath]
 getIndexFiles = do
@@ -64,8 +59,8 @@ readPackObj objHash readObj = do
   indexFiles <- getIndexFiles
   firstJustM (findObjInPack objHash readObj) indexFiles
 
-binarySearchHashStr :: ByteString -> Int -> Hash -> Maybe Int
-binarySearchHashStr hashes n hash = loop 0 (n - 1)
+binarySearchHashStr :: ByteString -> Int -> Int -> Hash -> Maybe Int
+binarySearchHashStr hashes l h hash = loop l h
  where
   needle = fromShort $ hashBS hash
   loop low high
@@ -101,7 +96,13 @@ findObjInPack objHash readObj idxPath = runMaybeT $ do
   (PackIndex{..}, contents) <- lift $ getIndex idxPath
 
   let count = fromIntegral $ UV.last idxFanout
-  offsetIdx <- hoistMaybe $ binarySearchHashStr idxObjectHashes count objHash
+
+  let firstByte = fromIntegral $ SBS.head $ hashBS objHash
+
+  let high = fromIntegral (idxFanout `UV.unsafeIndex` firstByte) - 1
+  let low = if firstByte == 0 then 0 else fromIntegral $ idxFanout `UV.unsafeIndex` (firstByte - 1) - 1
+
+  offsetIdx <- hoistMaybe $ binarySearchHashStr idxObjectHashes low high objHash
   let rawOffset = idxOffsets `indexWord32BE` offsetIdx
   let isOffsetBig = Bits.testBit rawOffset 31
   let offset :: Word64
