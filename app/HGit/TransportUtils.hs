@@ -126,7 +126,14 @@ getSrc res = do
 -- allow-tip-sha1-in-want allow-reachable-sha1-in-want no-done
 -- symref=HEAD:refs/heads/main filter object-format=sha1
 -- agent=git/github-7cf87d205eb3-Linux print capabilities
-data Capabilities = Capabilities {capMultiAck :: Bool, capMultiAckDetailed :: Bool, capAgent :: ByteString} deriving (Eq, Show)
+data Capabilities = Capabilities
+  { capMultiAck :: Bool
+  , capMultiAckDetailed :: Bool
+  , capSideBand :: Bool
+  , capSideBand64k :: Bool
+  , capAgent :: ByteString
+  }
+  deriving (Eq, Show)
 
 data CapSpec = CapSpec
   { capName :: ByteString
@@ -135,12 +142,14 @@ data CapSpec = CapSpec
   }
 
 emptyCapabilities :: Capabilities
-emptyCapabilities = Capabilities False False ""
+emptyCapabilities = Capabilities False False False False ""
 
 capSpecs :: [CapSpec]
 capSpecs =
   [ CapSpec "multi_ack" (Left $ \v c -> c{capMultiAck = v}) (Left capMultiAck)
   , CapSpec "multi_ack_detailed" (Left $ \v c -> c{capMultiAckDetailed = v}) (Left capMultiAckDetailed)
+  , CapSpec "side-band" (Left $ \v c -> c{capSideBand = v}) (Left capSideBand)
+  , CapSpec "side-band-64k" (Left $ \v c -> c{capSideBand64k = v}) (Left capSideBand64k)
   , CapSpec "agent" (Right $ \v c -> c{capAgent = v}) (Right capAgent)
   ]
 capMap :: HashMap ByteString CapSpec
@@ -173,4 +182,6 @@ makeClientCapabilities serverCaps =
     { capAgent = "hgit"
     , capMultiAckDetailed = capMultiAckDetailed serverCaps
     , capMultiAck = capMultiAck serverCaps && not (capMultiAckDetailed serverCaps)
+    , capSideBand64k = capSideBand64k serverCaps
+    , capSideBand = capSideBand serverCaps && not (capSideBand64k serverCaps)
     }

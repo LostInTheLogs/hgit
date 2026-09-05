@@ -17,6 +17,7 @@ import qualified Data.List.NonEmpty as NE
 import Data.Maybe (fromJust)
 import qualified Data.PQueue.Max as Q
 import qualified Data.Set as Set
+import qualified Data.String.Conversions.Monomorphic as X
 import qualified Data.Text as T
 import qualified Data.Vector as V
 import qualified FlatParse.Basic as FP
@@ -82,31 +83,54 @@ refDiscovery url = do
 data AckType = AckSimple | AckContinue | AckCommon | AckReady deriving (Show, Eq)
 data Ack = Ack {ackHash :: Hash, ackType :: AckType} deriving (Show, Eq)
 
+sideBandRouter ::
+  (MonadIO m) =>
+  TQueue (Maybe ByteString) ->
+  TQueue (Maybe ByteString) ->
+  ByteString ->
+  m ()
+sideBandRouter packQ sideQ bs = do
+  case BS.uncons bs of
+    Nothing -> pass
+    Just (1, rest) -> atomically $ writeTQueue packQ (Just rest)
+    Just (2, rest) -> atomically $ writeTQueue sideQ (Just $ rest)
+    Just (3, rest) -> throwErr "sideBandRouter" $ X.toStrictText rest
+    _ -> throwErr "sideBandRouter" "unknown channel"
+
 gitUploadPackS ::
   (MonadResource m) =>
   Capabilities ->
   TQueue (Maybe ByteString) ->
   TQueue (Maybe ByteString) ->
   ConduitT ByteString Void m (Maybe [Ack])
-gitUploadPackS _caps packQ sideQ = bracketP pass (const cleanup) $ const $ do
-  (acks, _nak, _rest) <-
+gitUploadPackS caps packQ sideQ = bracketP pass (const cleanup) $ const $ do
+  (acks, _nak, restPktLine) <-
     pktLineDecoder .| do
       a <- takeWhileC ("ACK" `BS.isPrefixOf`) .| mapC parseAck .| sinkList
       n <- takeWhileC (== "NAK") .| headC
-      r <- sinkList
+      r <- await
       return (a, n, r)
 
-  packHeader <- takeCE 4 .| foldC
-  case packHeader of
-    "PACK" -> do
-      leftover "PACK"
+  if capSideBand caps || capSideBand64k caps
+    then do
+      case restPktLine of
+        Just rest -> do
+          (yield rest >> pktLineDecoder) .| mapM_C (sideBandRouter packQ sideQ)
+          return Nothing
+        Nothing -> do
+          return $ Just acks
+    else do
+      packHeader <- takeCE 4 .| foldC
+      case packHeader of
+        "PACK" -> do
+          leftover "PACK"
 
-      awaitForever $ \x -> liftIO $ atomically $ writeTQueue packQ (Just x)
-      return Nothing
-    "" -> do
-      return $ Just acks
-    _ -> do
-      throwErr "gitUploadPackS" "leftover data"
+          awaitForever $ \x -> liftIO $ atomically $ writeTQueue packQ (Just x)
+          return Nothing
+        "" -> do
+          return $ Just acks
+        _ -> do
+          throwErr "gitUploadPackS" "leftover data"
  where
   cleanup = do
     closeQueue packQ
@@ -152,7 +176,7 @@ negotiate path h caps reqEmpty wants oldPending common sent = do
       (,,)
         <$> Concurrently (runConduitRes source)
         <*> Concurrently (runConduit $ sourceCloseableQueue packfileQ .| sinkHandle h)
-        <*> Concurrently (runConduit $ sourceCloseableQueue sideQ .| mapM_C (\x -> print $ "Thread side: " <> x))
+        <*> Concurrently (runConduit $ sourceCloseableQueue sideQ .| stdoutC)
 
   let commits = Map.fromList batch
   let getCachedParents hash = case Map.lookup hash commits of
@@ -238,7 +262,7 @@ gitFetch FetchOptions{} = runWithFoundRepo $ do
   -- TODO: sideband
 
   let wants = NE.fromList $ map head $ NE.group $ sort $ fst <$> matchingRefs
-  uniqueRefs <- map head . NE.group . sort <$> collectRefs
+  uniqueRefs <- map head . NE.group . sort <$> collectRefs -- TODO: use refspec
   pending <- makeCmtQueue <$> mapM readCommit (fst <$> uniqueRefs)
   packPth <- packPath []
 
