@@ -16,6 +16,7 @@ import HGit.GitLog
 import HGit.GitLsFiles
 import HGit.GitLsTree
 import HGit.GitReadTree
+import HGit.GitRefs
 import HGit.GitReset
 import HGit.GitStatus
 import HGit.GitSwitch
@@ -137,6 +138,10 @@ main = join $ customExecParser parserPrefs (info (parser <**> helper) fullDesc)
   parserPrefs :: ParserPrefs
   parserPrefs = prefs showHelpOnError
 
+  refsParser =
+    hsubparser $
+      command "list" (info (pure gitRefsList) (progDesc "create an empty git repository"))
+
   parser :: Parser (IO ())
   parser =
     hsubparser $
@@ -156,3 +161,4 @@ main = join $ customExecParser parserPrefs (info (parser <**> helper) fullDesc)
         <> command "switch" (info switchParser (progDesc "switch branches"))
         <> command "commit" (info commitParser (progDesc "record changes to repository"))
         <> command "fetch" (info fetchParser (progDesc "download objects and refs from another repository"))
+        <> command "refs" (info refsParser (progDesc "low level access to refs"))

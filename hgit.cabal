@@ -27,6 +27,7 @@ executable hgit
       HGit.GitLsFiles
       HGit.GitLsTree
       HGit.GitReadTree
+      HGit.GitRefs
       HGit.GitReset
       HGit.GitStatus
       HGit.GitSwitch

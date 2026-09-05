@@ -31,7 +31,6 @@ import qualified Data.ByteString.Lazy as BSL
 import qualified Data.ByteString.Lazy.Char8 as BSCL8
 import qualified Data.ByteString.Short as SBS
 import Data.Char (digitToInt)
-import qualified Data.List as List (stripPrefix)
 import qualified Data.Set as Set
 import qualified Data.Vector as V
 import HGit.Packfile

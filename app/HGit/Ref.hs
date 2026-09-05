@@ -1,13 +1,18 @@
+{-# LANGUAGE ScopedTypeVariables #-}
+
 module HGit.Ref where
 
 import Data.Foldable.Extra (findM)
 import qualified Data.List as List
-import HGit.Repository (WithRepository, gitPath, gitPath')
+import HGit.Repository (Repository (repoGitdir), WithRepository, gitPath, gitPath')
 import HGit.Types (Hash, asciiToHash)
 import HGit.Utils
 import Relude
 import System.FilePath ((</>))
+import System.FilePattern.Directory (getDirectoryFiles)
+import UnliftIO (IOException)
 import qualified UnliftIO.Directory as Dir
+import UnliftIO.Exception (catch)
 
 canonicalizeSymRef :: FilePath -> WithRepository FilePath
 canonicalizeSymRef path = do
@@ -42,11 +47,13 @@ resolveRef name = do
 
 collectRefs :: WithRepository [(Hash, String)]
 collectRefs = do
-  headsPath <- gitPath ["refs", "heads"]
-  files <- Dir.listDirectory headsPath
-  heads <- forM files $ \name -> do
-    hash <- followRef $ headsPath </> name
-    return (hash, toString $ "refs/heads/" <> name)
+  gitDir <- asks repoGitdir
+  files <- liftIO $ getDirectoryFiles gitDir ["refs/heads/*", "refs/tags/*", "refs/remotes/*/*"]
 
-  pass -- TODO: tags and packed-refs
+  heads <- forM files $ \relPath -> do
+    path <- gitPath' relPath
+    hash <- followRef path
+    return (hash, relPath)
+
+  pass -- TODO: packed-refs
   return heads

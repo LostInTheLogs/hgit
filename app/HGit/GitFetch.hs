@@ -78,6 +78,7 @@ refDiscovery url = do
   runConduitRes $
     Http.httpSource req getSrc
       .| pktLineDecoder
+      .| mapC dropNewLineBS
       .| infoRefsSmartS
 
 data AckType = AckSimple | AckContinue | AckCommon | AckReady deriving (Show, Eq)
@@ -262,7 +263,7 @@ gitFetch FetchOptions{} = runWithFoundRepo $ do
   -- TODO: sideband
 
   let wants = NE.fromList $ map head $ NE.group $ sort $ fst <$> matchingRefs
-  uniqueRefs <- map head . NE.group . sort <$> collectRefs -- TODO: use refspec
+  uniqueRefs <- map head . NE.group . sort <$> collectRefs -- TODO: it can return tags too
   pending <- makeCmtQueue <$> mapM readCommit (fst <$> uniqueRefs)
   packPth <- packPath []
 
@@ -273,6 +274,8 @@ gitFetch FetchOptions{} = runWithFoundRepo $ do
     negotiate path h clientCaps uploadPackReqEmpty wants pending [] 0
 
     hClose h
+    renameFile path "aaa"
+    error "wrr"
     idxFile <- mmapWithBytestring path $ \raw -> do
       let Pack{pckCount = count} = readPack raw
       -- TODO: if less than 100 objects, unpack to loose

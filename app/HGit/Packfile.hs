@@ -350,6 +350,7 @@ readPack bs = do
       let pckCount = fromIntegral $ indexWord32BE bs 2
       Pack{..}
 
+-- TODO: OBJ_REF_DELTA can refer to objects in this pack, need a few passes to index everything
 indexPack :: ByteString -> (Hash -> WithRepository Object) -> WithRepository FilePath
 indexPack bs readObj = do
   let packHash = hashLazy $ toLazy $ BS.dropEnd 20 bs
