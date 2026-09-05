@@ -1,4 +1,7 @@
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE TypeApplications #-}
+
+{- HLINT ignore "Move brackets to avoid $" -}
 
 module HGit.Object (
   getFileHash,
@@ -26,10 +29,13 @@ import qualified Data.ByteString.Builder as B
 import qualified Data.ByteString.Char8 as BSC8
 import qualified Data.ByteString.Lazy as BSL
 import qualified Data.ByteString.Lazy.Char8 as BSCL8
+import qualified Data.ByteString.Short as SBS
+import Data.Char (digitToInt)
 import qualified Data.List as List (stripPrefix)
+import qualified Data.Set as Set
 import qualified Data.Vector as V
 import HGit.Packfile
-import HGit.Repository (Repository, WithRepository, gitPath, objectsPath)
+import HGit.Repository (LooseCache (..), Repository, WithRepository, gitPath, objectsPath, repoLooseCache)
 import HGit.Types
 import HGit.Utils (binarySearch, fReadBSLine, fReadStrLine, nameParser, runParserUnsafe, runParserUnsafe2, throwErr, throwStrErr)
 import qualified HGit.ZLib as HZlib
@@ -38,7 +44,9 @@ import qualified Relude.File as File
 import System.FilePath ((</>))
 import qualified System.FilePath as Path
 import qualified Text.Show
+import UnliftIO (try)
 import qualified UnliftIO.Directory as Dir
+import UnliftIO.Exception (IOException)
 import qualified UnliftIO.IO as IO
 
 getFileHash :: (MonadIO m) => FilePath -> m Hash
@@ -111,18 +119,39 @@ readObjOfType expectedType objHash = do
   when (objType obj /= expectedType) $ throwErr "readObjOfType" "wrong type"
   return obj
 
+hexToByte :: String -> Maybe Word8
+hexToByte [hi, lo]
+  | isHex hi && isHex lo =
+      Just $ fromIntegral (digitToInt hi * 16 + digitToInt lo)
+  | otherwise = Nothing
+ where
+  isHex c = c `elem` ("0123456789abcdefABCDEF" :: String)
+hexToByte _ = Nothing
+
+getObjDirs :: WithRepository (Set Word8)
+getObjDirs = do
+  cache <- asks repoLooseCache
+  let ref = lcDirs cache
+  maybeDirs <- readIORef ref
+  case maybeDirs of
+    Nothing -> do
+      dirs <- Set.fromList . mapMaybe hexToByte <$> (Dir.listDirectory =<< objectsPath [])
+      writeIORef ref $ Just dirs
+      return dirs
+    Just dirs -> return dirs
+
 readLooseObj :: Hash -> WithRepository (Maybe Object)
 readLooseObj objHash = runMaybeT $ do
+  let firstByte = SBS.head $ hashBS objHash
+
+  dirs <- lift getObjDirs
+  guard $ firstByte `Set.member` dirs
+
   let (folderName, fileName) = splitAt 2 $ show objHash
-  -- TODO: cache the byte (2 ascii chars) of the name of the directory in a set
-  -- (fanout also uses the first byte)
-  -- use UnliftIO.Memoize
 
   loosePath <- lift $ objectsPath [folderName, fileName]
-  looseFileExists <- Dir.doesFileExist loosePath
-  guard looseFileExists
 
-  objRaw <- readFileBS loosePath
+  objRaw <- MaybeT $ rightToMaybe <$> try @WithRepository @IOException (readFileBS loosePath)
 
   let (decomp, _) = HZlib.decompressExactTwoPass objRaw lenReader
 

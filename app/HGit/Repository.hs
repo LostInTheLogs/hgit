@@ -16,6 +16,7 @@ module HGit.Repository (
   WithRepository (..),
   WorkTreePath,
   PackCache (..),
+  LooseCache (..),
 ) where
 
 import qualified Data.List as List
@@ -28,15 +29,22 @@ import System.FilePath
 import UnliftIO (MonadUnliftIO)
 import qualified UnliftIO.Directory as Dir
 
+-- TODO: maybe use Memoized for cache <https://hackage-content.haskell.org/package/unliftio-0.2.25.1/docs/UnliftIO-Memoize.html>
+
 data PackCache = PackCache
   { pcIndexFiles :: IORef (Maybe [FilePath])
   , pcIndexes :: IORef (Map FilePath (PackIndex, ByteString))
+  }
+
+data LooseCache = LooseCache
+  { lcDirs :: IORef (Maybe (Set Word8))
   }
 
 data Repository = Repository
   { repoWorktree :: FilePath
   , repoGitdir :: FilePath -- Path to .git directory
   , repoPackCache :: PackCache
+  , repoLooseCache :: LooseCache
   }
 
 newtype WithRepository a = WithRepository
@@ -103,7 +111,8 @@ makeRepo :: (MonadIO m) => FilePath -> FilePath -> m (Repository)
 makeRepo worktree gitdir = do
   pcIndexFiles <- newIORef Nothing
   pcIndexes <- newIORef Map.empty
-  return $ Repository{repoWorktree = worktree, repoGitdir = gitdir, repoPackCache = PackCache{..}}
+  lcDirs <- newIORef empty
+  return $ Repository{repoWorktree = worktree, repoGitdir = gitdir, repoPackCache = PackCache{..}, repoLooseCache = LooseCache{..}}
 
 openRepo :: FilePath -> IO (Maybe Repository)
 openRepo worktree = do

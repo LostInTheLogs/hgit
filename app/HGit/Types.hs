@@ -51,7 +51,7 @@ zeroAsciiHash :: [Char]
 zeroAsciiHash = replicate 40 '0'
 
 byteHashBuilder :: Hash -> B.Builder
-byteHashBuilder hash = B.byteString $ fromShort $ hashBS hash
+byteHashBuilder hash = B.shortByteString $ hashBS hash
 
 byteHashParser :: A.Parser Hash
 byteHashParser = Hash . toShort <$> A.take 20
