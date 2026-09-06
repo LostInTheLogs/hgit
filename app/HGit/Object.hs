@@ -8,6 +8,7 @@ module HGit.Object (
   hashLazy,
   makeObject,
   writeObj,
+  readMaybeObj,
   readObj,
   readObjOfType,
   Hash (..),
@@ -102,13 +103,17 @@ Fallback: Scan Individual .idx Files
 
 -}
 
-readObj :: Hash -> WithRepository Object
-readObj objHash = do
-  found <- runMaybeT $ do
+readMaybeObj :: Hash -> WithRepository (Maybe Object)
+readMaybeObj objHash = do
+  runMaybeT $ do
     let loose = readLooseObj objHash
-    let pack = readPackObj objHash readObj
+    let pack = readPackObj objHash readMaybeObj
     let readers = MaybeT <$> [loose, pack]
     asum readers
+
+readObj :: Hash -> WithRepository Object
+readObj objHash = do
+  found <- readMaybeObj objHash
   let err = throwStrErr "readObj" $ "Object '" ++ show objHash ++ "' not found"
   maybe err return found
 

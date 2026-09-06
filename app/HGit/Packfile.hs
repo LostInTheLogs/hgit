@@ -1,3 +1,5 @@
+{-# LANGUAGE TupleSections #-}
+
 module HGit.Packfile (readPackObj, Pack (..), readPack, indexPack) where
 
 import Control.Monad.Extra (firstJustM)
@@ -12,9 +14,10 @@ import qualified Data.ByteString.Builder as B
 import qualified Data.ByteString.Lazy as BSL
 import qualified Data.ByteString.Short as SBS
 import qualified Data.ByteString.Unsafe as BSU
+import Data.List (partition)
 import qualified Data.Map as Map
 import qualified Data.String.Conversions.Monomorphic as Conv
-import Data.Tuple.Extra (fst3)
+import Data.Tuple.Extra (fst3, thd3)
 import qualified Data.Vector as V
 import qualified Data.Vector.Unboxed as UV
 import qualified FlatParse.Basic as FP
@@ -54,7 +57,7 @@ getIndexFiles = do
           writeIORef ref Nothing
           return []
 
-readPackObj :: Hash -> (Hash -> WithRepository Object) -> WithRepository (Maybe Object)
+readPackObj :: Hash -> (Hash -> WithRepository (Maybe Object)) -> WithRepository (Maybe Object)
 readPackObj objHash readObj = do
   indexFiles <- getIndexFiles
   firstJustM (findObjInPack objHash readObj) indexFiles
@@ -91,7 +94,7 @@ getIndex idxPath = do
       writeIORef ref $ Map.insert idxPath (idx, packRaw) indexes
       return (idx, packRaw)
 
-findObjInPack :: Hash -> (Hash -> WithRepository Object) -> FilePath -> WithRepository (Maybe Object)
+findObjInPack :: Hash -> (Hash -> WithRepository (Maybe Object)) -> FilePath -> WithRepository (Maybe Object)
 findObjInPack objHash readObj idxPath = runMaybeT $ do
   (PackIndex{..}, contents) <- lift $ getIndex idxPath
 
@@ -111,7 +114,7 @@ findObjInPack objHash readObj idxPath = runMaybeT $ do
           then idxBigOffsets `indexWord64BE` fromIntegral (Bits.clearBit rawOffset 31)
           else fromIntegral rawOffset
 
-  lift $ fst <$> readPackObjAtOffset readObj contents (fromIntegral offset)
+  MaybeT $ fst <$> readPackObjAtOffset readObj contents (fromIntegral offset)
 
 {- | Returns the object and next offset
 n-byte type and length (3-bit type, (n-1)*7+4-bit length)
@@ -126,10 +129,10 @@ OBJ_OFS_DELTA> a negative relative offset from the delta object's position in th
 compressed delta data
 -}
 readPackObjAtOffset ::
-  (Hash -> WithRepository Object) ->
+  (Hash -> WithRepository (Maybe Object)) ->
   BS.ByteString ->
   Int64 ->
-  WithRepository (Object, Int64)
+  WithRepository (Maybe (Object), Int64)
 readPackObjAtOffset readObj h offset = do
   -- TODO: get rid if fromIntegrals fromStrist etc
   let contents = BS.drop (fromIntegral offset) h
@@ -143,26 +146,28 @@ readPackObjAtOffset readObj h offset = do
       let (decompressed, rest) = HZlib.decompressExact (toStrict packObjData) poSize
       let obj = makeObject (toLazy decompressed) objType
       let nextOffset = fromIntegral $ BS.length h - BS.length rest
-      return (obj, nextOffset)
+      return (Just obj, nextOffset)
     -- delta
     Nothing -> do
       let (lazyBaseObj, deltaRaw) = getBase poType packObjData
       let (decompressed, rest) = HZlib.decompressExact (toStrict deltaRaw) poSize
 
       let delta = runFParserUnsafe deltaFParser decompressed
-      base <- lazyBaseObj
-
-      -- when (pdBaseSize delta /= objSize base) $ throwErr "readPackObjAtOffset" "Base obj size doesn't match"
-
-      let rawObj = applyDeltas (objPayload base) delta
-      let obj = makeObject rawObj (objType base)
-
-      -- when (pdObjSize delta /= objSize obj) $ throwErr "readPackObjAtOffset" "Result obj size doesn't match"
-
+      maybeBase <- lazyBaseObj
       let nextOffset = fromIntegral $ BS.length h - BS.length rest
-      return (obj, nextOffset)
+      case maybeBase of
+        Nothing -> return (Nothing, nextOffset)
+        Just base -> do
+          -- when (pdBaseSize delta /= objSize base) $ throwErr "readPackObjAtOffset" "Base obj size doesn't match"
+
+          let rawObj = applyDeltas (objPayload base) delta
+          let obj = makeObject rawObj (objType base)
+
+          -- when (pdObjSize delta /= objSize obj) $ throwErr "readPackObjAtOffset" "Result obj size doesn't match"
+
+          return (Just obj, nextOffset)
  where
-  getBase :: PackObjType -> BSL.ByteString -> (WithRepository Object, BSL.ByteString)
+  getBase :: PackObjType -> BSL.ByteString -> (WithRepository (Maybe Object), BSL.ByteString)
   getBase POOfsDelta raw = do
     let (offsetDelta, rest) = runParserUnsafe2 offsetParser raw
     let base = fst <$> readPackObjAtOffset readObj h (offset - offsetDelta)
@@ -350,15 +355,19 @@ readPack bs = do
       let pckCount = fromIntegral $ indexWord32BE bs 2
       Pack{..}
 
--- TODO: OBJ_REF_DELTA can refer to objects in this pack, need a few passes to index everything
-indexPack :: ByteString -> (Hash -> WithRepository Object) -> WithRepository FilePath
-indexPack bs readObj = do
+indexPack :: ByteString -> (Hash -> WithRepository (Maybe Object)) -> WithRepository FilePath
+indexPack bs readMaybeObj = do
   let packHash = hashLazy $ toLazy $ BS.dropEnd 20 bs
   let Pack{..} = readPack bs
 
-  x <- fst <$> runStateT (replicateM (fromIntegral pckCount) $ StateT work) 12
-  let sorted = sortWith fst3 x
-  let (hashes, offsets, crc32s) = unzip3 sorted
+  (partialRes, (_, foundMap)) <- runStateT (replicateM (fromIntegral pckCount) $ StateT fistPass) (12, Map.empty)
+  (resMaybe, _) <- runStateT (doSecondPass partialRes []) foundMap
+  let res = case traverse (\(w, i, mh) -> (w,i,) <$> mh) resMaybe of
+        Just x -> x
+        Nothing -> throwErr "indexPack" "can't find all delta base objs"
+
+  let sorted = sortWith thd3 res
+  let (crc32s, offsets, hashes) = unzip3 sorted
 
   let (smallOffsets, bigOffsets) = foldr sortOffset ([], []) offsets
 
@@ -388,11 +397,46 @@ indexPack bs readObj = do
 
   return path
  where
-  work offset = do
-    (obj, nextOffset) <- readPackObjAtOffset readObj bs offset
+  readObjHelper :: Map Hash Int64 -> Hash -> WithRepository (Maybe Object)
+  readObjHelper found hash = do
+    case found Map.!? hash of
+      Just hsh -> fst <$> readPackObjAtOffset (readObjHelper found) bs hsh
+      Nothing -> readMaybeObj hash
+
+  doSecondPass :: [(Word32, Int64, Maybe Hash)] -> [(Word32, Int64, Maybe Hash)] -> StateT (Map Hash Int64) WithRepository [(Word32, Int64, Maybe Hash)]
+  doSecondPass list acc = do
+    let (found, notFound) = partition (isJust . thd3) list
+    -- if done or no progress
+    if null notFound || null found
+      then return $ acc ++ found
+      else do
+        x <- traverse secondPass notFound
+        doSecondPass x found
+
+  secondPass :: (Word32, Int64, Maybe Hash) -> StateT (Map Hash Int64) WithRepository (Word32, Int64, Maybe Hash)
+  secondPass (crc, offset, Nothing) = do
+    foundMap <- get
+    (mObj, _) <- lift $ readPackObjAtOffset (readObjHelper foundMap) bs offset
+    let mHash = objHash <$> mObj
+    case mHash of
+      Just hash -> modify' $ Map.insert hash offset
+      Nothing -> pass
+    return (crc, offset, mHash)
+  secondPass arg = return arg
+
+  fistPass :: (Int64, Map Hash Int64) -> WithRepository ((Word32, Int64, Maybe Hash), (Int64, Map Hash Int64))
+  fistPass (offset, found) = do
+    (obj, nextOffset) <- readPackObjAtOffset (readObjHelper found) bs offset
     let rawData = BS.drop (fromIntegral offset) $ BS.take (fromIntegral nextOffset) bs
     let crc = HZlib.crc32 rawData
-    return ((objHash obj, offset, crc), nextOffset)
+    let mHash = objHash <$> obj
+
+    let newFound =
+          case mHash of
+            Just hash -> Map.insert hash offset found
+            Nothing -> found
+
+    return ((crc, offset, mHash), (nextOffset, newFound))
 
   isSmallOffset n = n <= 0x7FFFFFFF
 

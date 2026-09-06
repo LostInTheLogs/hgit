@@ -23,7 +23,7 @@ import qualified Data.Vector as V
 import qualified FlatParse.Basic as FP
 import HGit.Commit (Commit (..), CommitQueue, cmtQueuePop, commitHash, makeCmtQueue, readCommit)
 import HGit.Config (readConfig)
-import HGit.Object (readObj)
+import HGit.Object (readMaybeObj, readObj)
 import HGit.Packfile (Pack (..), indexPack, readPack)
 import HGit.Ref (collectRefs)
 import HGit.Repository (WithRepository, gitPath, packPath, runWithFoundRepo)
@@ -274,8 +274,6 @@ gitFetch FetchOptions{} = runWithFoundRepo $ do
     negotiate path h clientCaps uploadPackReqEmpty wants pending [] 0
 
     hClose h
-    renameFile path "aaa"
-    error "wrr"
     idxFile <- mmapWithBytestring path $ \raw -> do
       let Pack{pckCount = count} = readPack raw
       -- TODO: if less than 100 objects, unpack to loose
@@ -285,7 +283,7 @@ gitFetch FetchOptions{} = runWithFoundRepo $ do
           return Nothing
         else do
           putTextLn "Indexing..."
-          Just <$> indexPack raw readObj
+          Just <$> indexPack raw readMaybeObj
 
     case idxFile of
       Nothing -> pass
