@@ -18,7 +18,7 @@ todo: comprehensive list of features and missing features or limitations
 ### Commands
 
 - init
-- fetch (smart git wire v1 via http, capabilities: multi_ack, multi_ack_detailed)
+- fetch (smart git wire v1 via http, capabilities: multi_ack, multi_ack_detailed, no-done, side-band, side-band-64k)
 - status
 - add
 - commit

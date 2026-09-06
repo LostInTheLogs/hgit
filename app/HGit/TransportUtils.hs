@@ -120,6 +120,7 @@ getSrc res = do
 data Capabilities = Capabilities
   { capMultiAck :: Bool
   , capMultiAckDetailed :: Bool
+  , capNoDone :: Bool
   , capSideBand :: Bool
   , capSideBand64k :: Bool
   , capAgent :: ByteString
@@ -133,12 +134,13 @@ data CapSpec = CapSpec
   }
 
 emptyCapabilities :: Capabilities
-emptyCapabilities = Capabilities False False False False ""
+emptyCapabilities = Capabilities False False False False False ""
 
 capSpecs :: [CapSpec]
 capSpecs =
   [ CapSpec "multi_ack" (Left $ \v c -> c{capMultiAck = v}) (Left capMultiAck)
   , CapSpec "multi_ack_detailed" (Left $ \v c -> c{capMultiAckDetailed = v}) (Left capMultiAckDetailed)
+  , CapSpec "no-done" (Left $ \v c -> c{capNoDone = v}) (Left capNoDone)
   , CapSpec "side-band" (Left $ \v c -> c{capSideBand = v}) (Left capSideBand)
   , CapSpec "side-band-64k" (Left $ \v c -> c{capSideBand64k = v}) (Left capSideBand64k)
   , CapSpec "agent" (Right $ \v c -> c{capAgent = v}) (Right capAgent)
@@ -171,8 +173,9 @@ makeClientCapabilities :: Capabilities -> Capabilities
 makeClientCapabilities serverCaps =
   emptyCapabilities
     { capAgent = "hgit"
-    , capMultiAckDetailed = capMultiAckDetailed serverCaps
     , capMultiAck = capMultiAck serverCaps && not (capMultiAckDetailed serverCaps)
-    , capSideBand64k = capSideBand64k serverCaps
+    , capMultiAckDetailed = capMultiAckDetailed serverCaps
+    , capNoDone = capMultiAckDetailed serverCaps
     , capSideBand = capSideBand serverCaps && not (capSideBand64k serverCaps)
+    , capSideBand64k = capSideBand64k serverCaps
     }

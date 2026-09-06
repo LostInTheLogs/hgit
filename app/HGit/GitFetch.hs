@@ -109,8 +109,15 @@ gitUploadPackS caps packQ sideQ = bracketP pass (const cleanup) $ const $ do
     pktLineDecoder .| do
       a <- takeWhileC ("ACK" `BS.isPrefixOf`) .| mapC (parseAck . dropNewLineBS) .| sinkList
       n <- takeWhileC ("NAK" `BS.isPrefixOf`) .| mapC dropNewLineBS .| headC
+      aa <-
+        if capNoDone caps
+          then do
+            x <- takeWhileC ("ACK" `BS.isPrefixOf`) .| mapC (parseAck . dropNewLineBS) .| sinkList
+            return $ a ++ x
+          else return a
+
       r <- await
-      return (a, n, r)
+      return (aa, n, r)
 
   if capSideBand caps || capSideBand64k caps
     then do
