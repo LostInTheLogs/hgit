@@ -2,8 +2,8 @@
 
 module HGit.GitReset (gitReset, ResetOptions (..), ResetMode (..)) where
 
+import HGit.Branch (setHeadToBranch)
 import HGit.FindObject (findAndCoerceToTree, findObject)
-import HGit.GitSwitch (setHeadToBranch)
 import HGit.Index (readIndex)
 import HGit.Object (ObjType (CommitObj), Object (..), readObj, readObjOfType)
 import HGit.Ref (canonicalizeSymRef)

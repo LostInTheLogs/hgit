@@ -5,6 +5,7 @@ module HGit.FindObject (
   coerceObjTo,
   findAndCoerceObj,
   findAndCoerceToTree,
+  readFindObjOfType,
 ) where
 
 import Control.Monad.Extra (firstJustM)
@@ -28,6 +29,8 @@ findHash hashText = do
 -- | get hash from e.g. HEAD
 findObject :: Text -> WithRepository Hash
 findObject obj = do
+  -- TODO: support HEAD^1 etc
+
   let possibilities =
         [ resolveRef $ toString obj
         , findHash obj
@@ -37,6 +40,7 @@ findObject obj = do
     Just found -> return found
     Nothing -> throwErr "findObject" $ "Couldn't find an object from: " <> obj
 
+-- | coerce Commit->Tree, Tag->Commit. etc
 coerceObjTo :: ObjType -> Object -> WithRepository Object
 coerceObjTo toType obj
   | objType obj == toType = return obj
@@ -50,3 +54,6 @@ findAndCoerceObj oType ref = coerceObjTo oType =<< readObj =<< findObject ref
 
 findAndCoerceToTree :: Text -> WithRepository Tree
 findAndCoerceToTree ref = objToTree <$> findAndCoerceObj TreeObj ref
+
+readFindObjOfType :: ObjType -> Text -> WithRepository Object
+readFindObjOfType oType ref = readObjOfType oType =<< findObject ref

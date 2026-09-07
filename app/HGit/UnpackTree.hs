@@ -12,6 +12,8 @@ import Relude
 import qualified System.FilePath as Path
 import qualified UnliftIO.Directory as Dir
 
+-- TODO: too safe, not added files that don't conflict are marked as conflicts
+
 -- | Returns untracked files that would be overwritten by checkout
 findUntrackedConflicts :: FlattenedTree -> IndexEntries -> WithRepository [WorkTreePath]
 findUntrackedConflicts tree entries =
@@ -25,8 +27,6 @@ findTrackedConflicts :: IndexEntries -> WithRepository [TreeIndexDiff]
 findTrackedConflicts entries = do
   tree <- flattenTree =<< findAndCoerceToTree "HEAD"
   diffTreeIndex tree entries False
-
-data UnpackTreeOpts = UnpackTreeOpts {utoCheckConflicts :: Bool}
 
 checkConflicts :: Index -> FlattenedTree -> WithRepository ()
 checkConflicts index flattenedTree = do
@@ -56,6 +56,8 @@ formatTrackedConflict x =
     DiffOnlyInTree (path, _) -> path
     DiffModified _ entry -> iePath entry
     _ -> error "unexpected TreeIndexDiff"
+
+data UnpackTreeOpts = UnpackTreeOpts {utoCheckConflicts :: Bool}
 
 unpackTree :: UnpackTreeOpts -> Index -> FlattenedTree -> WithRepository ()
 unpackTree UnpackTreeOpts{..} index flattenedTree = do

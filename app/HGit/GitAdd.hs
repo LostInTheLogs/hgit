@@ -28,13 +28,8 @@ gitAdd AddOptions{..} = runWithFoundRepo $ do
   let doesNotExist = throwStrErr "gitAdd" $ "The file does not exist: " <> optPath
   newFiles <-
     if fileExists
-      then do
-        return $ List.singleton relPath
+      then do return $ List.singleton relPath
       else if dirExists then listRepoFilesRecursive relPath else doesNotExist
-
-  let newFilesSet = Set.fromList newFiles
-  let entriesSet = idxEntries idx
-  let oldEntries = V.filter (\entry -> not (iePath entry `Set.member` newFilesSet)) $ idxEntries idx
 
   newEntries <- forM newFiles $ \a -> do
     -- TODO: perms, symlink, etc.
@@ -44,7 +39,9 @@ gitAdd AddOptions{..} = runWithFoundRepo $ do
     writeObj obj
     makeEntryAndStat a filePath (objHash obj) RegularFile
 
-  let allEntries = insertManySorted oldEntries (V.fromList newEntries)
-  let newIdx = idx{idxEntries = allEntries}
+  let newFilesSet = Set.fromList newFiles
+  let oldEntries = V.filter (\entry -> not (iePath entry `Set.member` newFilesSet)) $ idxEntries idx
+  let oldAndNewEntries = insertManySorted oldEntries (V.fromList newEntries)
+  let newIdx = idx{idxEntries = oldAndNewEntries}
 
   writeIndex newIdx

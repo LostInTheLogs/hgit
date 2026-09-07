@@ -5,6 +5,7 @@ import qualified Data.List as List
 import qualified Data.Set as Set
 import qualified Data.Text as T
 import qualified Data.Vector as V
+import HGit.Branch (getBranch)
 import HGit.FindObject (findAndCoerceObj)
 import HGit.GitDiffIndex (diffTreeIndex)
 import HGit.Ignore (listRepoFilesRecursive)
@@ -24,8 +25,12 @@ getStagedChanges entries = do
 
 gitStatus :: StatusOptions -> IO ()
 gitStatus StatusOptions{} = runWithFoundRepo $ do
-  branch <- getBranch
-  putStrLn $ "On branch " <> branch
+  branchOrHead <- getBranch
+  case branchOrHead of
+    Right branch -> do
+      putStrLn $ "On branch " <> branch
+    Left h -> do
+      putStrLn $ "HEAD detached at " <> h
   putStrLn ""
 
   entries <- idxEntries <$> readIndex
@@ -81,13 +86,6 @@ printUntracked :: FilePath -> IO ()
 printUntracked path = do
   putStr "\t"
   putStrLn path
-
-getBranch :: WithRepository String
-getBranch = do
-  refOrHead <- fReadStrLine =<< gitPath ["HEAD"]
-  case stripPrefix "ref: refs/heads/" refOrHead of
-    Nothing -> return refOrHead
-    Just ref -> return ref
 
 getUntracked :: IndexEntries -> WithRepository (Set.Set FilePath)
 getUntracked entries = do

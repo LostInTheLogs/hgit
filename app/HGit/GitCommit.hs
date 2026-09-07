@@ -104,7 +104,7 @@ gitCommit CommitOptions{..} = runWithFoundRepo $ do
         , commitParents = [commitHash parent]
         , commitMsg = encodeUtf8 message
         , commitHeaderRest = ""
-        , commitHash = zeroHash
+        , commitHash = error "partial commit"
         , commitCommitter = committer
         , commitAuthor = committer
         }

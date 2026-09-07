@@ -26,6 +26,10 @@ todo: comprehensive list of features and missing features or limitations
 - switch
 - log
 
+### Config
+
+Simple config support (read only, no includes)
+
 ### Plumbing commands
 
 ### Object storage

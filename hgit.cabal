@@ -11,6 +11,7 @@ build-type:     Simple
 executable hgit
   main-is: Main.hs
   other-modules:
+      HGit.Branch
       HGit.Commit
       HGit.Config
       HGit.FindObject

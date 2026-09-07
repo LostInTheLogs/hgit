@@ -15,6 +15,8 @@ import Relude
 import System.FilePath
 import qualified UnliftIO.Directory as Dir
 
+-- <https://github.com/git/git/blob/3cb9185f65410273787f74333cc027d2ea5daada/Documentation/config.adoc>
+
 {-
 FILES
 By default, git config will read configuration options from multiple files:
@@ -120,6 +122,13 @@ whitespace =
         |]
    )
 
+--  assumedTrue
+-- 	gitProxy=default-proxy ; comment
+-- 	string = "some string value"
+
+-- TODO: support this
+-- 	gitProxy="ssh" for "kernel.org"
+
 keyValFParser :: Parser (Text, NonEmpty Text)
 keyValFParser = do
   key <- T.toLower . toText <$> FP.some keyChar <* whitespace
@@ -171,6 +180,12 @@ type HeaderKey = (Text, Text)
 type Section = HashMap Text (NonEmpty Text)
 type Config = Map.HashMap HeaderKey Section
 
+-- Examples:
+-- [core "subheader"]
+-- [core]
+
+-- TODO: support this
+-- [core.subheader]
 sectionFParser :: Parser (HeaderKey, Section)
 sectionFParser = do
   _ <- $(FP.char '[') <* whitespace
@@ -202,6 +217,8 @@ configFParser = do
   sections <- FP.many sectionFParser
   return $ Map.fromList sections
 
+-- TODO: include directives
+-- <https://github.com/git/git/blob/3cb9185f65410273787f74333cc027d2ea5daada/Documentation/config.adoc#includes>
 readOneConfig :: (MonadIO m) => FilePath -> m Config
 readOneConfig path = do
   contents <- readFileBS path

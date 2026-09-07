@@ -89,27 +89,12 @@ objectFileParser expectedHash objRaw = nameParser "objectFileParser" $ do
   let objHash = expectedHash
   pure Object{..}
 
-{-
-GIT OBJECT LOOKUP ORDER
-
-Check Loose Object File
-    Location: .git/objects/xx/yyyy...
-    If file exists, read raw zlib payload and decompress.
-
-Fallback: Scan Individual .idx Files
-    Location: .git/objects/pack/pack-*.idx
-    Iterate over un-indexed .idx files and binary search each.
-    If found, retrieve Byte Offset and read matching .pack.
-
--}
-
 readMaybeObj :: Hash -> WithRepository (Maybe Object)
-readMaybeObj objHash = do
-  runMaybeT $ do
-    let loose = readLooseObj objHash
-    let pack = readPackObj objHash readMaybeObj
-    let readers = MaybeT <$> [loose, pack]
-    asum readers
+readMaybeObj objHash = runMaybeT $ do
+  let loose = readLooseObj objHash
+  let pack = readPackObj objHash readMaybeObj
+  let readers = MaybeT <$> [loose, pack]
+  asum readers
 
 readObj :: Hash -> WithRepository Object
 readObj objHash = do

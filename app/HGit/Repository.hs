@@ -107,13 +107,6 @@ getRepo =
     Nothing -> throwErr "getRepo" "Not in a git repository!"
     Just a -> return a
 
-makeRepo :: (MonadIO m) => FilePath -> FilePath -> m (Repository)
-makeRepo worktree gitdir = do
-  pcIndexFiles <- newIORef Nothing
-  pcIndexes <- newIORef Map.empty
-  lcDirs <- newIORef empty
-  return $ Repository{repoWorktree = worktree, repoGitdir = gitdir, repoPackCache = PackCache{..}, repoLooseCache = LooseCache{..}}
-
 openRepo :: FilePath -> IO (Maybe Repository)
 openRepo worktree = do
   let gitdir = worktree </> ".git"
@@ -122,8 +115,18 @@ openRepo worktree = do
     then Just <$> makeRepo worktree gitdir
     else return Nothing
 
+makeRepo :: (MonadIO m) => FilePath -> FilePath -> m Repository
+makeRepo worktree gitdir = do
+  pcIndexFiles <- newIORef Nothing
+  pcIndexes <- newIORef Map.empty
+  lcDirs <- newIORef empty
+  return $ Repository{repoWorktree = worktree, repoGitdir = gitdir, repoPackCache = PackCache{..}, repoLooseCache = LooseCache{..}}
+
 type WorkTreePath = FilePath
 
+{- | Makes sure a path is in the worktree and returns both the full and
+worktree relative path
+-}
 toWorktreePath :: FilePath -> WithRepository (FilePath, WorkTreePath)
 toWorktreePath path = do
   fullpath <- Dir.canonicalizePath path

@@ -139,11 +139,14 @@ oneLineLong Commit{..} = do
 
 type CommitQueue = (Q.MaxQueue Commit, Set Hash)
 
--- | commit queue sorted by commit time
+{- | Make a commit queue from @commits@ sorted by commit time.
+commits should be unique, this is not checked
+-}
 makeCmtQueue :: [Commit] -> CommitQueue
 makeCmtQueue commits = do
   (Q.fromList commits, fromList $ commitHash <$> commits)
 
+-- | pop from commit queue and add the parents of the popped commit to the queue
 cmtQueuePop :: CommitQueue -> WithRepository (Maybe Commit, CommitQueue)
 cmtQueuePop (queue, seen) = do
   if Q.null queue
