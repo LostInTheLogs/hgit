@@ -1,13 +1,18 @@
-# Notes
+# HGit
 
-todo: comment all the functions with a -- |
-todo: comprehensive list of features and missing features or limitations
+HGit is a simple "clone" of `git` I made to practice haskell.
+
+## Showcase
+
+TODO: asciinema recording
 
 ## Limitations
 
+- Assumes .git/index exists
+- Doesn't update the index after `stat`ing files, so it gets slower with time
 - No reflog support
 - No tags and packed-refs support
-- No SHA-256 support
+- SHA-1 repos only
 - No symlinks support
 - No submodules support
 - Doesn't support blobs larger than ram
@@ -18,7 +23,8 @@ todo: comprehensive list of features and missing features or limitations
 ### Commands
 
 - init
-- fetch (smart git wire v1 via http, capabilities: multi_ack, multi_ack_detailed, no-done, side-band, side-band-64k)
+- fetch (smart git wire v1 via http, capabilities: multi_ack,
+  multi_ack_detailed, no-done, side-band, side-band-64k)
 - status
 - add
 - commit
@@ -30,10 +36,23 @@ todo: comprehensive list of features and missing features or limitations
 
 Simple config support (read only, no includes)
 
-### Plumbing commands
-
 ### Object storage
 
 - loose objects: read, write
 - pack.pack (v2): read
 - pack.idx (v2): read, write (for `git fetch`)
+
+### Plumbing commands
+
+- diff-index
+- checkout-index
+- cat-file
+- hash-object
+- ls-files
+- ls-tree
+- read-tree
+- refs list
+
+## Benchmark
+
+TODO: benchmark
